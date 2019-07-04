@@ -7,11 +7,9 @@ import torch.cuda
 import criterion as cr
 import grow_graph as sg
 
-batch_size = 4
-
 class online_graph():
 
-    def reset_graph(self,framenum):
+    def reset_graph(self, framenum):
         del self.nodes
         del self.edges
         self.onlineGraph.delGraph(framenum)
@@ -30,7 +28,7 @@ class online_graph():
 
     def ConstructGraph(self, current_batch, framenum, stateful=True, valid=False):
         self.onlineGraph.step = framenum
-        if valid :
+        if valid:
             for pedID, pos in current_batch.items():
                 # (pedID, pos), = item.items()
                 # [(pedID, pos)] = item.items()
@@ -51,31 +49,25 @@ class online_graph():
                 except KeyError:
                     key = list(current_batch.keys())
                     frame = current_batch[key[0]]
-                # Add nodes
-                # self.nodes = self.onlineGraph.getNodes()
-                # nodelist = []
-                # if framenum >=1:
-                #     self.nodes.append({})
-                # if isinstance(frame , dict):
-                #     f_inst = frame
-                # else:
-                #     f_inst = frame.items()
+            # Add nodes
+            # self.nodes = self.onlineGraph.getNodes()
+            # nodelist = []
 
-                for item in frame:
-                    (pedID, pos), = item.items()
-                    # [(pedID, pos)] = item.items()
-                    # if self.node
-                    # if pedID not in self.nodes[framenum]:
-                    # node_type = 'H'
-                    node_id = pedID
-                    node_pos_list = {}
-                    node_pos_list[framenum] = pos
+            # if framenum >=1:
+            #     self.nodes.append({})
+            for item in frame:
+                (pedID, pos), = item.items()
+                # [(pedID, pos)] = item.items()
+                # if self.node
+                # if pedID not in self.nodes[framenum]:
+                # node_type = 'H'
+                node_id = pedID
+                node_pos_list = {}
+                node_pos_list[framenum] = pos
 
-                    node = Node(node_id, node_pos_list)
-                    node.setTargets(seq=pos)
-                    self.onlineGraph.setNodes(framenum, node)
-
-        self.onlineGraph.dist_mat = torch.zeros(len(self.nodes), len(self.nodes))
+                node = Node(node_id, node_pos_list)
+                node.setTargets(seq=pos)
+                self.onlineGraph.setNodes(framenum, node)
 
         return self.onlineGraph
 
@@ -100,7 +92,6 @@ class online_graph():
 class Graph():
     def __init__(self):
         self.adj_mat = []
-        self.dist_mat = []
         self.nodes = [{}]
         self.edges = [[]]  # dict
         self.Stateful = True
@@ -141,15 +132,13 @@ class Graph():
         for i in range(framenum):
             self.nodes.append({})
             self.edges.append([])
-        # self.edges = np.zeros((framenum))
-
 
 class Node():
     def __init__(self, node_id, node_pos_list):
         self.id = node_id
         self.pos = node_pos_list
-        self.state = torch.zeros(batch_size, 256)  # 256 self.human_ebedding_size
-        self.cell = torch.zeros(batch_size, 256)
+        self.state = torch.zeros(4, 256)  # 256 self.human_ebedding_size
+        self.cell = torch.zeros(4, 256)
         self.seq = []
         self.targets = []
         self.vel = 0

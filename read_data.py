@@ -1,14 +1,13 @@
-import numpy as np
-import pickle
-import os
-import random 
 import glob
-import torch
 import math
+import pickle
+
+import numpy as np
+
 
 class DataLoader():
 
-    def __init__(self, args, datasets=[0, 1, 2, 3, 4,5,6], sel=None ,start=0, processFrame=False , infer=False):
+    def __init__(self, args, sel=None , datasets=[0, 1, 2, 3, 4, 5, 6], start=0, processFrame=False, infer=False):
         '''
         Initialiser function for the DataLoader class
         params:
@@ -17,9 +16,17 @@ class DataLoader():
         datasets : The indices of the datasets to use
         forcePreProcess : Flag to forcefully preprocess the data again from csv files
         '''
-        parent_dir = '/home/siri0005/Documents/self-growing-spatial-graph/self-growing-gru-offline_avgPool/data'
+        parent_dir = '/home/siri0005/Documents/self-growing-spatial-graph/multi_stackLSTM_chains_offline_vel/data'
         # '/Data/stanford_campus_dataset/annotations/'
         # List of data directories where world-coordinates data is stored
+
+        # self.data_dirs = [parent_dir + '/stanford/annotations/bookstore/',
+        #                   parent_dir + '/stanford/annotations/hyang/',
+        #                   parent_dir + '/stanford/annotations/coupa/',
+        #                   parent_dir + '/stanford/annotations/deathCircle/',
+        #                   parent_dir + '/stanford/annotations/gates/',
+        #                   parent_dir + '/stanford/annotations/nexus/',
+        #                   parent_dir + '/crowds/']
 
         self.data_dirs = [parent_dir + '/stanford/bookstore/',
                           parent_dir + '/stanford/hyang/',
@@ -60,7 +67,8 @@ class DataLoader():
         # Define the path in which the process data would be stored
         self.current_dir = self.used_data_dirs[start]
 
-        files = self.used_data_dirs[start] + "/*.csv"
+        files = self.used_data_dirs[start] + "/*.csv" #txt
+        # files = self.used_data_dirs[start] + "/video*"
         data_files = sorted(glob.glob(files))
 
         if sel is None:
@@ -69,17 +77,18 @@ class DataLoader():
                 print(data_files)
                 sel = input('select which file you want for loading:')
 
-        self.dataset_pointer = str(data_files[int(sel)])[-5]
-        self.load_dataset(data_files[int(sel)])
+        self.dataset_pointer = str(data_files[int(sel)])[-5] #-1
+        if sel < len(data_files):
+            self.load_dataset(data_files[int(sel)]) #+'/annotations.txt'
 
         # If the file doesn't exist or forcePreProcess is true
-        if processFrame:
-            print("Creating pre-processed data from raw data")
-            self.frame_preprocess(self.current_dir + '/trajectories_{0}.cpkl'.format(int(self.dataset_pointer)),
-                                  seed= self.seed)
+            if processFrame:
+                print("Creating pre-processed data from raw data")
+                self.frame_preprocess(self.current_dir + '/trajectories_{0}.cpkl'.format(int(self.dataset_pointer)),
+                                      seed=self.seed)
 
-        # Load the processed data from the pickle file
-        self.load_trajectories(self.current_dir + 'trajectories_{0}.cpkl'.format(int(self.dataset_pointer)))
+            # Load the processed data from the pickle file
+            self.load_trajectories(self.current_dir + 'trajectories_{0}.cpkl'.format(int(self.dataset_pointer)))
 
     def load_trajectories(self, data_file):
         ''' Load set of pre-processed trajectories from pickled file '''
@@ -98,14 +107,22 @@ class DataLoader():
         # Load data from the pickled file
 
         f = open(data_file, 'rb')
-        self.raw_data = np.genfromtxt(fname=data_file) #, delimiter=',' remove
+        self.raw_data = np.genfromtxt(fname=data_file)  # remove, delimiter=','
         f.close()
+
+        if self.raw_data.shape[1] == 10:
+            self.frameList = self.raw_data[:, 5]
+            ped = self.raw_data[:, 0]
+            ind = range(0,int(len(self.raw_data[:, 0])/12))
+            x = (self.raw_data[:, 1] + self.raw_data[:, 3])/2
+            y = (self.raw_data[:, 2] + self.raw_data[:, 4])/2
+            self.pedsPerFrameList = [np.array(ind), ped, x , y]
         # Get all the data from the pickle file
         # self.data = self.raw_data[:,2:4]
-        self.frameList = self.raw_data[:,0]
-        self.pedsPerFrameList = self.raw_data[:, 0:4]
-        self.seed = self.frameList[0]
-
+        else:
+            self.frameList = self.raw_data[:, 0]
+            self.pedsPerFrameList = self.raw_data[:, 0:4]
+        self.seed = range(len(self.frameList))[0]
         # self.numPedsList = self.raw_data[:,1]
         # self.valid_data = self.raw_data[3]
         # counter = 0
@@ -120,6 +137,7 @@ class DataLoader():
         #     # Increment the counter with the number of sequences in the current dataset
         #     counter += int(len(all_frame_data) / (self.seq_length))
         #     valid_counter += int(len(valid_frame_data) / (self.seq_length))
+
         # # Calculate the number of batches
         # self.num_batches = int(counter/self.batch_size)
         # self.valid_num_batches = int(valid_counter/self.batch_size)
@@ -136,18 +154,17 @@ class DataLoader():
         # Source data
         x_batch = {}
         # Target data
-        y_batch = [] # np.empty(shape=(1,12), dtype=np.float32)
+        y_batch = []  # np.empty(shape=(1,12), dtype=np.float32)
         # Dataset data
         # d = []
         # Iteration index
-        i = -1
+        i = 0
         max_idx = max(self.frameList)
         # unique_frames = np.unique(self.frameList)
 
         max_log = math.log(max_idx, self.seq_length)
 
         while i < self.batch_size:
-            i += 1
             # Get the frame pointer for the current dataset
             idx = self.frame_pointer
             # While there is still seq_length number of frames left in the current dataset
@@ -161,36 +178,37 @@ class DataLoader():
                 # All the data in this sequence
                 try:
                     source_frame = self.trajectories[idx]
-                    # Number of unique peds in this sequence of frames
-                    if len(source_frame):
-                        x_batch[idx] = source_frame
-                        idx_c = idx
-                        for i in range(self.pred_len):
-                            targets.append(self.trajectories[idx_c])
-                            if idx_c + self.pred_len <= max_idx:
-                                idx_c += self.diff  # self.pred_len
-                    else:
-                        self.tick_frame_pointer(valid=False, incr=self.diff)
-                        continue
                 except KeyError:
-                    self.tick_frame_pointer(valid=False, incr=self.diff)
+                    self.tick_frame_pointer(valid=False)
                     continue
 
-                # advance the frame pointer to a random point
-                # if randomUpdate:
-                #     self.frame_pointer += random.randint(1, self.seq_length)
-                # else:
+                # Number of unique peds in this sequence of frames
+                x_batch[idx] = source_frame
+                idx_c = idx
+                for i in range(self.pred_len):
+                    targets.append(self.trajectories[idx_c])
+                    if idx_c + self.pred_len <= max_idx:
+                        idx_c += self.diff  # self.pred_len
+
+                # Number of unique peds in this sequence of frames
+                x_batch[idx] = source_frame
+                idx_c = idx
+                for i in range(self.pred_len):
+                    targets.append(self.trajectories[idx_c])
+                    if idx_c + self.pred_len <= max_idx:
+                        idx_c += self.diff  # self.pred_len
+
                 self.frame_pointer += self.seq_length
-                # d.append(self.dataset_pointer)
+            # else:
+            #     self.tick_frame_pointer(valid=False, incr=self.seq_length)
+
             else:
-                # Not enough frames left
-                # Increment the dataset pointer and set the frame_pointer to zero
-                self.tick_frame_pointer(valid=False)
+                self.tick_frame_pointer(valid=False, incr=self.seq_length)
+            i += 1
 
+        return x_batch, targets, self.frame_pointer  # , d
 
-        return x_batch, targets, self.frame_pointer #, d
-
-    def frame_preprocess(self,  data_file, seed=0):
+    def frame_preprocess(self, data_file, seed=0):
         '''
         Function that will pre-process the pixel_pos.csv files of each dataset
         into data with occupancy grid that can be used
@@ -199,13 +217,23 @@ class DataLoader():
         data_file : The file into which all the pre-processed data needs to be stored
         '''
 
-        frame_data = {i:{} for i in self.frameList}
-        self.frame_pointer =  self.seed
+        frame_data = {i: {} for i in self.frameList}
+        self.frame_pointer = self.seed
         # self.frameList[1] - seed
-
+        j = 0
+        x = []
+        self.frame_pointer = self.seed
         while self.frame_pointer <= max(self.frameList):
             x = [{ped: [pos_x, pos_y]} for (ind, ped, pos_x, pos_y) in self.pedsPerFrameList
-                 if ind == self.frame_pointer]
+            if ind == self.frame_pointer]
+            # for i in range(0,int(max(self.frameList))):
+            #     ind = self.pedsPerFrameList[0][i]
+            #     ped = self.pedsPerFrameList[1][i]
+            #     pos_x = self.pedsPerFrameList[2][i]
+            #     pos_y = self.pedsPerFrameList[3][i]
+            #     if ind == self.frame_pointer:
+            #         x.append({ped: [pos_x, pos_y]})
+
             frame_data[self.frame_pointer] = x
             # np.select(condlist=[self.pedsPerFrameList[:, 0] == self.frameList[self.frame_pointer]],
             #                    choicelist=[self.pedsPerFrameList[:, 0]], default=-1).sum() np.compress()
@@ -227,14 +255,12 @@ class DataLoader():
         # np.select(condlist=[self.pedsPerFrameList[:, 0] == self.frameList[self.frame_pointer]],
         #                    choicelist=[self.pedsPerFrameList[:, 0]], default=-1).sum() np.compress()
 
-
-
         # Save the tuple (all_frame_data, frameList_data, numPeds_data) in the pickle file
         f = open(data_file, "wb")
         pickle.dump(frame_data, f, protocol=2)
         f.close()
 
-    def tick_frame_pointer(self, valid=False, incr = 12):
+    def tick_frame_pointer(self, valid=False, incr=12):
         '''
         Advance the dataset pointer
         '''
@@ -245,12 +271,12 @@ class DataLoader():
             self.frame_pointer += incr
         else:
             # Go to the next dataset
-            self.dataset_pointer += 1
+            self.valid_dataset_pointer += 1
             # Set the frame pointer to zero for the current dataset
             self.valid_frame_pointer = 0
             # If all datasets are done, then go to the first one again
-            if self.dataset_pointer >= len(self.valid_data):
-                self.dataset_pointer = 0
+            if self.valid_dataset_pointer >= len(self.valid_data):
+                self.valid_dataset_pointer = 0
 
     def reset_data_pointer(self, valid=False, dataset_pointer=0, frame_pointer=0):
         '''
