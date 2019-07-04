@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 import os
-import random 
+import random
 import glob
 import torch
 import math
@@ -140,14 +140,13 @@ class DataLoader():
         # Dataset data
         # d = []
         # Iteration index
-        i = -1
+        i = 0
         max_idx = max(self.frameList)
         # unique_frames = np.unique(self.frameList)
 
         max_log = math.log(max_idx, self.seq_length)
 
         while i < self.batch_size:
-            i += 1
             # Get the frame pointer for the current dataset
             idx = self.frame_pointer
             # While there is still seq_length number of frames left in the current dataset
@@ -186,7 +185,7 @@ class DataLoader():
                 # Not enough frames left
                 # Increment the dataset pointer and set the frame_pointer to zero
                 self.tick_frame_pointer(valid=False)
-
+            i += 1
 
         return x_batch, targets, self.frame_pointer #, d
 
